@@ -1,0 +1,637 @@
+#ESRI
+impala-shell -ki npsec-data-1.vpc.cloudera.com:21000 --ssl -u ha549487@AD.SEC.CLOUDERA.COM
+
+
+
+wget "http://download.nextag.com/apache/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz"
+sudo mkdir -p /usr/local/maven
+sudo tar xzf apache-maven-3.3.9-bin.tar.gz -C /usr/local/maven
+cd /usr/local/maven
+sudo ln -s apache-maven-3.3.9 latest
+sudo ln -s latest default
+cd /usr/local/bin
+sudo ln -s /usr/local/maven/latest/bin/mvn mvn
+
+
+git clone https://github.com/Esri/spatial-framework-for-hadoop
+git clone https://github.com/Esri/geometry-api-java
+
+cd ~/spatial-framework-for-hadoop
+mvn package -Dmaven.javadoc.skip=true
+
+cd ~/geometry-api-java
+mvn package -Dmaven.javadoc.skip=true
+
+
+for CLUSTER_HOST in `cat ~/all_hosts`; do
+ssh -t $CLUSTER_HOST "sudo mkdir -p /var/lib/hive/aux_jars"
+scp ~/spatial-framework-for-hadoop/json/target/spatial-sdk-json-1.*.jar $CLUSTER_HOST:/tmp
+scp ~/spatial-framework-for-hadoop/hive/target/spatial-sdk-hive-1.*.jar $CLUSTER_HOST:/tmp
+scp ~/geometry-api-java/target/esri-geometry-api-1.2.1.jar $CLUSTER_HOST:/tmp
+ssh -t $CLUSTER_HOST "sudo mv /tmp/spatial*jar /tmp/esri-geometry-*.jar /var/lib/hive/aux_jars"
+ssh -t $CLUSTER_HOST "sudo chown -R hive:hive /var/lib/hive/aux_jars"
+done
+
+
+
+hadoop fs -mkdir /user/hive/aux_jars
+hadoop fs -rm -skipTrash /user/hive/aux_jars/spatial-sdk-*
+hadoop fs -put /var/lib/hive/aux_jars/*.jar /user/hive/aux_jars/
+hadoop fs -chmod -R 770 /user/hive/aux_jars
+hadoop fs -chown -R hive:hive /user/hive/aux_jars
+
+
+
+#beeline -u "jdbc:hive2://xbigdd01.company.com:10000/default;principal=hive/_HOST@company.COM;ssl=true;"
+beeline -u "jdbc:hive2://npopa-mst-2.vpc.cloudera.com:10000/default;principal=hive/_HOST@AD.SEC.CLOUDERA.COM;ssl=true;sslTrustStore=/opt/cloudera/security/jks/truststore.jks;trustStorePassword=cloudera"
+
+
+
+create role admin;
+GRANT ROLE admin to group ha494794g;
+grant all on server server1 to role admin;
+
+GRANT ALL ON URI 'file:///var/lib/hive/aux_jars/spatial-sdk-json-1.2.0.jar' TO ROLE admin;
+GRANT ALL ON URI 'hdfs:///user/hive/aux_jars/spatial-sdk-json-1.2.0.jar' TO ROLE admin;
+
+GRANT ALL ON URI 'file:///var/lib/hive/aux_jars/spatial-sdk-hive-1.2.0.jar' TO ROLE admin;
+GRANT ALL ON URI 'hdfs:///user/hive/aux_jars/spatial-sdk-hive-1.2.0.jar' TO ROLE admin;
+
+GRANT ALL ON URI 'file:///var/lib/hive/aux_jars/esri-geometry-api-1.2.1.jar' TO ROLE admin;
+GRANT ALL ON URI 'hdfs:///user/hive/aux_jars/esri-geometry-api-1.2.1.jar' TO ROLE admin;
+
+
+beeline -u "jdbc:hive2://npopa-mst-2.vpc.cloudera.com:10000/default;principal=hive/_HOST@AD.SEC.CLOUDERA.COM;ssl=true;sslTrustStore=/opt/cloudera/security/jks/truststore.jks;trustStorePassword=cloudera" -f "esriFunctions.hql"
+
+
+
+
+
+
+
+######################################################################################################################################################
+
+
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/COUNTY
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/STATE
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ZCTA5
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/PRIMARYROADS
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/RAILS
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ROADS
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/LINEARWATER
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/AREAWATER
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/PLACE
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/POINTLM
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDR
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFEAT
+wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFN
+
+
+######################################################################################################################################################
+
+yum -y install gdal
+
+mkdir /mnt/geojson
+
+#!/bin/bash
+export TIGER_HOME=/mnt/ftp2.census.gov/geo/tiger/TIGER2016
+export SHP_HOME=/mnt/gis/shp
+export GEOJSON_HOME=/mnt/gis/geojson
+
+#Merge SHP files if multiple ones are found
+for DATASET in `ls $TIGER_HOME`
+do
+    echo "Processing dataset: " $DATASET
+    if [ -d $SHP_HOME/$DATASET ]
+    then
+        rm -rf $SHP_HOME/$DATASET
+    fi
+    mkdir -p $SHP_HOME/$DATASET
+
+    for DATASET_FILE in `ls $TIGER_HOME/$DATASET`
+    do
+        echo "Processing file: " $DATASET_FILE
+        GEOFILE="${DATASET_FILE%.*}"
+        rm -rf /tmp/$GEOFILE
+        export FILE_TYPE=`echo $DATASET_FILE|cut -f3 -d "_"`
+        export FILE_TYPE_SUFFIX=${FILE_TYPE:0:2}
+        unzip $TIGER_HOME/$DATASET/$DATASET_FILE -d /tmp/$GEOFILE > /dev/null 2>&1
+        if [[ -f  $SHP_HOME/$DATASET/${DATASET}_${FILE_TYPE_SUFFIX}.shp ]]
+        then
+                ogr2ogr -f 'ESRI Shapefile' -update -append $SHP_HOME/$DATASET/${DATASET}_${FILE_TYPE_SUFFIX}.shp /tmp/$GEOFILE/$GEOFILE.shp -nln ${DATASET}_${FILE_TYPE_SUFFIX}
+        else
+                ogr2ogr -f 'ESRI Shapefile' $SHP_HOME/$DATASET/${DATASET}_${FILE_TYPE_SUFFIX}.shp /tmp/$GEOFILE/$GEOFILE.shp
+        fi
+        rm -rf /tmp/$GEOFILE
+    done
+done
+
+
+#!/bin/bash
+export TIGER_HOME=/mnt/ftp2.census.gov/geo/tiger/TIGER2016
+export SHP_HOME=/mnt/gis/shp
+export GEOJSON_HOME=/mnt/gis/geojson
+
+#convert SHP to geojson
+
+for DATASET in `ls $SHP_HOME`
+do
+    echo "Processing dataset: " $DATASET
+    if [ -d $GEOJSON_HOME/$DATASET ]
+    then
+        rm -rf $GEOJSON_HOME/$DATASET
+    fi
+    mkdir -p $GEOJSON_HOME/$DATASET
+    for DATASET_FILE in `ls $SHP_HOME/$DATASET/*.shp`
+    do
+
+        GEOFILE=$(basename $DATASET_FILE)
+        GEOFILE="${GEOFILE%.*}"
+        echo "Processing file: " $DATASET_FILE "into: " $GEOJSON_HOME/$DATASET/$GEOFILE.geojson
+        ogr2ogr -f GeoJSON -t_srs "WGS84" "$GEOJSON_HOME/$DATASET/$GEOFILE.geojson" $DATASET_FILE
+    #break
+    done
+
+done
+
+
+
+
+#!/bin/bash
+#try to get the table structure
+export TIGER_HOME=/mnt/ftp2.census.gov/geo/tiger/TIGER2016
+export SHP_HOME=/mnt/gis/shp
+export GEOJSON_HOME=/mnt/gis/geojson
+export DB_RAW=gis_raw
+export DB=gis
+
+for DATASET in `ls $SHP_HOME`
+do
+    echo "Processing dataset: " $DATASET
+    for DATASET_FILE in `ls $SHP_HOME/$DATASET/*.shp`
+    do
+        echo "Processing file: " $DATASET_FILE
+        GEOFILE=$(basename $DATASET_FILE)
+        GEOFILE="${GEOFILE%.*}"
+        HQL=$GEOJSON_HOME/$DATASET.hql
+        cat<<EOF>$HQL
+        --generated from $GEOFILE.shp
+
+        --set some properties
+        SET mapreduce.reduce.memory.mb=8092;
+        SET mapreduce.reduce.java.opts='-Xmx8092';
+        SET mapreduce.map.memory.mb=8092;
+        SET mapreduce.map.java.opts='-Xmx8092M';
+        -- set mapreduce.input.fileinputformat.split.minsize=2048000;
+        set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+
+        DROP TABLE IF EXISTS ${DB_RAW}.${DATASET}_RAW;
+
+        CREATE EXTERNAL TABLE ${DB_RAW}.${DATASET}_RAW(
+EOF
+        ogrinfo -al -so "$DATASET_FILE"|tail -n +14>$HQL.struct
+        cat $HQL.struct|sed "s/\:.*$/ string,/g"|sed "s/^/        /g">>$HQL
+        cat<<EOF>>$HQL
+        geometry binary)
+        ROW FORMAT SERDE 'com.esri.hadoop.hive.serde.GeoJsonSerDe'
+        STORED AS INPUTFORMAT 'com.esri.json.hadoop.EnclosedGeoJsonInputFormat'
+        OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+        LOCATION '/user/geojson/${DATASET}';
+
+        --no need to load the data since we created an external table but the below can be used if required
+        --LOAD DATA INPATH '/user/geojson/${DATASET}' OVERWRITE INTO TABLE ${DATASET}_RAW;
+
+       --create a parquet table to remove the dependency from geojson serde and improve performance
+
+        DROP TABLE IF EXISTS ${DB}.${DATASET};
+
+        CREATE TABLE ${DB}.${DATASET} STORED AS PARQUET AS
+        SELECT
+EOF
+        cat $HQL.struct|sed "s/\:.*$/,/g"|sed "s/^/        /g">>$HQL
+        cat<<EOF>>$HQL
+        ST_BinGeometry(0.01,(geometry)) grid_arr,
+        geometry geometry
+        from ${DATASET}_RAW;
+EOF
+        cat<<EOF>>$HQL
+
+        --create a parquet table and keep the geometry as geojson so non-geometrical columns can be queried from impala
+
+        DROP TABLE IF EXISTS ${DB}.${DATASET}_IMPALA;
+
+        CREATE TABLE ${DB}.${DATASET}_IMPALA STORED AS PARQUET AS
+        SELECT
+EOF
+        cat $HQL.struct|sed "s/\:.*$/,/g"|sed "s/^/        /g">>$HQL
+        cat<<EOF>>$HQL
+        grid_arr,
+        ST_AsGeoJSON(geometry) geometry_geojson
+        from ${DATASET};
+EOF
+        #process just one file from each folder (assume the struct is same for all)
+        rm -rf /tmp/$GEOFILE
+        rm -rf ${HQL}.struct
+        break
+
+    done
+done
+
+
+#!/bin/bash
+export TIGER_HOME=/mnt/ftp2.census.gov/geo/tiger/TIGER2016
+export SHP_HOME=/mnt/gis/shp
+export GEOJSON_HOME=/mnt/gis/geojson
+
+#load the data in hadoop
+hadoop fs -rm -r -skipTrash /user/geojson
+time hdfs dfs -put $GEOJSON_HOME /user
+hadoop fs -chmod -R 770 /user/geojson
+hadoop fs -chown -R hive:hive /user/geojson/
+
+
+#!/bin/bash
+export TIGER_HOME=/mnt/ftp2.census.gov/geo/tiger/TIGER2016
+export SHP_HOME=/mnt/gis/shp
+export GEOJSON_HOME=/mnt/gis/geojson
+for HQL in `ls $GEOJSON_HOME/*.hql`
+do
+   echo ${HQL}
+   beeline -u "jdbc:hive2://npsec-mst-3.vpc.cloudera.com:10000/default;principal=hive/_HOST@AD.SEC.CLOUDERA.COM;ssl=true;sslTrustStore=/opt/cloudera/security/jks/truststore.jks;trustStorePassword=cloudera" -f ${HQL}
+done
+
+
+create database gis_raw;
+
+create database gis;
+
+paste -d"|" all_tables all_tables |grep -v raw|sed "s/| /rename to gis./g"|sed "s/^ /alter table default./g"|sed "s/$/;/g"
+
+
+
+
+
+for DATASET in `ls $TIGER_HOME`
+do
+    echo "Processing dataset: " $DATASET
+    export FILE_TYPE=`ls $TIGER_HOME/$DATASET|head -1|cut -f3 -d "_"`
+    if [[ $FILE_TYPE = 'us' ]]
+    then
+       echo "US level file"
+       export LEVEL=1
+    elif [[ ${#FILE_TYPE} = 2 ]]
+    then
+        echo "State lavel files - State: ${FILE_TYPE:0:2}"
+        export LEVEL=2
+    elif [[ ${#FILE_TYPE} = 5 ]]
+    then
+        echo "County lavel files - State: ${FILE_TYPE:0:2} County: ${FILE_TYPE:2:5}"
+        export LEVEL=2
+    fi
+    echo ""
+done
+
+
+#convert SHP to geojson
+for DATASET in `ls $TIGER_HOME`
+do
+    echo "Processing dataset: " $DATASET
+    if [ -d $GEOJSON_HOME/$DATASET ]
+    then
+        rm -rf $GEOJSON_HOME/$DATASET
+    fi
+    mkdir -p $GEOJSON_HOME/$DATASET
+    for DATASET_FILE in `ls $TIGER_HOME/$DATASET`
+    do
+        echo "Processing file: " $DATASET_FILE
+        GEOFILE="${DATASET_FILE%.*}"
+        rm -rf /tmp/$GEOFILE
+        unzip $TIGER_HOME/$DATASET/$DATASET_FILE -d /tmp/$GEOFILE
+        echo ogr2ogr -f GeoJSON -t_srs "WGS84" "$GEOJSON_HOME/$DATASET/$GEOFILE.geojson" "/tmp/$GEOFILE/$GEOFILE.shp"
+        ogr2ogr -f GeoJSON -t_srs "WGS84" "$GEOJSON_HOME/$DATASET/$GEOFILE.geojson" "/tmp/$GEOFILE/$GEOFILE.shp"
+        rm -rf /tmp/$GEOFILE
+    done
+    #break
+done
+
+
+drop table state_neighbours;
+
+create table state_neighbours as
+select s1.NAME, s2.NAME NNAME from STATE s1, STATE s2
+where ST_Touches(s1.geometry, s2.geometry);
+
+drop table zip_neighbours;
+
+create table zip_neighbours as
+select z1.zcta5ce10, z2.zcta5ce10 nzcta5ce10 from zcta5 z1, zcta5 z2
+where ST_Touches(z1.geometry, z2.geometry);
+
+
+
+create table z_cart_r
+STORED AS PARQUET as
+select z.aland10 z_aland10,
+z.awater10 z_awater10,
+z.classfp10 z_classfp10,
+z.funcstat10 z_funcstat10,
+z.geoid10 z_geoid10,
+z.mtfcc10 z_mtfcc10,
+z.zcta5ce10 z_zcta5ce10,
+z.geometry z_geometry,
+r.fullname r_fullname,
+r.linearid r_linearid,
+r.mtfcc r_mtfcc,from
+r.rttyp r_rttyp,
+r.geometry r_geometry from zcta5 z, roads r
+where z.ZCTA5CE10='61874' ;
+--and ST_Contains(z.geometry, r.geometry);
+
+
+
+
+set PARQUET_FILE_SIZE=10485760
+SET parquet.block.size=10485760
+set dfs.blocksize=10485760
+
+set dfs.blocksize=134217728
+SET parquet.block.size=134217728
+
+
+SET hive.enforce.bucketing=false;
+SET hive.auto.convert.join=false;
+SET hive.auto.convert.join.noconditionaltask = false;
+SET hive.auto.convert.sortmerge.join=false;
+SET hive.optimize.bucketmapjoin=false;
+SET hive.optimize.bucketmapjoin.sortedmerge=false;
+SET hive.auto.convert.sortmerge.join.noconditionaltask=false;
+
+
+
+set hive.merge.mapfiles=false;
+set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+set mapred.map.tasks = 10;
+
+SET mapreduce.input.fileinputformat.split.maxsize=1048576;
+
+
+ org.apache.hadoop.hive.ql.exec.mr.MapredLocalTask
+Error while processing statement: FAILED: Execution Error, return code 2 from org.apache.hadoop.hive.ql.exec.mr.MapredLocalTask
+
+
+select ST_Bin(0.1,st_point(-88.242092,40.055700));
+--4611564365371048314
+
+
+select ST_Bin(0.1,st_point(-88.299552, 40.054843 ));
+
+select ST_AsGeoJSON(ST_BinEnvelope(0.1, st_point(-88.242092,40.055700)));
+--{"type":"Polygon","coordinates":[[[-88.24209200008772,40.05469999990985],[-88.24109200008772,40.05469999990985],[-88.24109200008772,40.05569999990985],[-88.24209200008772,40.05569999990985],[-88.24209200008772,40.05469999990985]]],"crs":null}
+
+select ST_AsGeoJSON(ST_BinEnvelope(0.01, 4611673858350118174));
+--{"type":"Polygon","coordinates":[[[-88.24249999993481,40.05549999994785],[-88.2414999999348,40.05549999994785],[-88.2414999999348,40.056499999947846],[-88.24249999993481,40.056499999947846],[-88.24249999993481,40.05549999994785]]],"crs":null}
+
+
+
+
+numCols 3037000499
+down 1518496246
+over 1518491420
+down1 1518496241
+over1 1518491425
+
+
+
+for CLUSTER_HOST in `cat ~/all_hosts`; do
+ssh -t $CLUSTER_HOST "sudo mkdir -p /var/lib/hive/aux_jars"
+scp spatial-sdk-hive-1.1.1-SNAPSHOT.jar $CLUSTER_HOST:/tmp
+ssh -t $CLUSTER_HOST "sudo mv /tmp/spatial*jar  /var/lib/hive/aux_jars"
+ssh -t $CLUSTER_HOST "sudo chown -R hive:hive /var/lib/hive/aux_jars"
+done
+
+
+hadoop fs -rm -r -skipTrash /user/hive/aux_jars
+hadoop fs -mkdir /user/hive/aux_jars
+hadoop fs -put /var/lib/hive/aux_jars/*.jar /user/hive/aux_jars/
+hadoop fs -chmod -R 770 /user/hive/aux_jars
+hadoop fs -chown -R hive:hive /user/hive/aux_jars
+
+
+create FUNCTION ST_BinEnvelope2 as 'com.esri.hadoop.hive.ST_BinEnvelope2' USING JAR 'hdfs:///user/hive/aux_jars/spatial-sdk-hive-1.1.1-SNAPSHOT.jar';
+
+    at org.apache.hadoop.hive.ql.exec.MapOperator.process(MapOperator.java:507)
+    at org.apache.hadoop.hive.ql.exec.mr.ExecMapper.map(ExecMapper.java:170)
+    at org.apache.hadoop.mapred.MapRunner.run(MapRunner.java:54)
+    at org.apache.hadoop.mapred.MapTask.runOldMapper(MapTask.java:453)
+    at org.apache.hadoop.mapred.MapTask.run(MapTask.java:343)
+    at org.apache.hadoop.mapred.YarnChild$2.run(YarnChild.java:164)
+    at java.security.AccessController.doPrivileged(Native Method)
+    at javax.security.auth.Subject.doAs(Subject.java:415)
+    at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1693)
+    at org.apache.hadoop.mapred.YarnChild.main(YarnChild.java:158)
+Caused by: java.lang.ClassCastException: java.util.ArrayList cannot be cast to org.apache.hadoop.io.BytesWritable
+    at org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableBinaryObjectInspector.getPrimitiveWritableObject(WritableBinaryObjectInspector.java:54)
+    at org.apache.hadoop.hive.serde2.lazy.LazyUtils.writePrimitiveUTF8(LazyUtils.java:240)
+    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.serialize(LazySimpleSerDe.java:303)
+    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.serializeField(LazySimpleSerDe.java:258)
+    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.doSerialize(LazySimpleSerDe.java:242)
+    at org.apache.hadoop.hive.serde2.AbstractEncodingAwareSerDe.serialize(AbstractEncodingAwareSerDe.java:55)
+    at org.apache.hadoop.hive.ql.exec.FileSinkOperator.processOp(FileSinkOperator.java:668)
+    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
+    at org.apache.hadoop.hive.ql.exec.SelectOperator.processOp(SelectOperator.java:84)
+    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
+    at org.apache.hadoop.hive.ql.exec.FilterOperator.processOp(FilterOperator.java:120)
+    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
+    at org.apache.hadoop.hive.ql.exec.TableScanOperator.processOp(TableScanOperator.java:95)
+    at org.apache.hadoop.hive.ql.exec.MapOperator$MapOpCtx.forward(MapOperator.java:157)
+    at org.apache.hadoop.hive.ql.exec.MapOperator.process(MapOperator.java:497)
+    ... 9 more
+
+[4611673843165115679,4611673843165115680,4611673843165115681,4611673843165115682,4611673843165115683,4611673843165115684,4611673846202116178,4611673846202116179,4611673846202116180,4611673846202116181,4611673846202116182,4611673846202116183,4611673849239116677,4611673849239116678,4611673849239116679,4611673849239116680,4611673849239116681,4611673849239116682,4611673852276117176,4611673852276117177,4611673852276117178,4611673852276117179,4611673852276117180,4611673852276117181,4611673855313117675,4611673855313117676,4611673855313117677,4611673855313117678,4611673855313117679,4611673855313117680,4611673858350118174,4611673858350118175,4611673858350118176,4611673858350118177,4611673858350118178,4611673858350118179]
+
+
+
+sed 's/"fields" :sum=//'
+
+
+
+sed -n '/"fields":/,/],/{p; /],/q}' FileName
+sed -n '/"fields":/,/]/!d;/]/q'  RoadEdge.json
+
+
+
+fullfile= ../JSON/landbase/RoadEdge.json
+#Try to extract only the schema from the JSON (to speed processing up)
+fname=$(basename $fullfile)
+fbname=${fname%.*}
+echo '{"fields":'`cat $fullfile | tr -d '\n' | grep -o -P '(?<="fields":).*?(?=])'`']}' > ${fbname}_schema.json
+#generate sqls
+python EsriJson.py $fullfile
+
+
+
+
+fullfile=/home/bgold/GIS/JSON/landbase/RoadEdge.json
+#Try to extract only the schema from the JSON (to speed processing up)
+fname=$(basename $fullfile)
+fbname=${fname%.*}
+echo '{"fields":'`grep -o -P '(?<="fields":).*?(?=])' $fullfile`']}' > ${fbname}_schema.json
+#generate sqls
+python EsriJson.py $fullfile
+
+
+my $desc = "Description:";
+my $tag  = "Tag:";
+
+$line =~ /$desc(.*?)$tag/;
+my $matched = $1;
+print $matched;
+or
+
+my $desc = "Description:";
+my $tag  = "Tag:";
+
+my @matched = $line =~ /$desc(.*?)$tag/;
+print $matched[0];
+or
+
+my $desc = "Description:";
+my $tag  = "Tag:";
+
+(my $matched = $line) =~ s/$desc(.*?)$tag/$1/;
+print $matched;
+Additional
+
+If your Description and Tag may be on separate lines, you may need to use the /s modifier, to treat it as a single line, so the \n won't wreck it. Example:
+
+$_=qq{Description:foo
+      more description on
+      new line Tag: some
+      tag};
+s/Description:(.*?)Tag:/$1/s; #notice the trailing slash
+print;
+
+
+
+use strict;
+open(DAT, $data_file) || die("Could not open file!");
+print "file opened successfully!! \n";
+$data=<DAT>;
+
+
+cat /home/bgold/GIS/JSON/landbase/RoadEdge.json|grep -ob --line-buffered '"fields":'
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+cat <<-\EOF >gisGenerateAllSchemas.sh
+#!/bin/bash
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+    #Extract schema information
+    fname=$(basename $gisfile)
+    fbname=${fname%.*}
+    echo "Generating schema JSON for $fbname"
+    datalength=10000
+    offset=`LC_ALL=C fgrep -ob '"fields":' $gisfile|cut -f1 -d":"`
+    schema_raw=`tail -c+$offset $gisfile | head -c$datalength`
+    echo '{"fields":'`echo $schema_raw|grep -o -P '(?<="fields":).*?(?=])'`']}' > ../work/${fbname}_schema.json
+done
+
+EOF
+
+
+
+cat <<-\EOF >gisCreateAllScripts.sh
+#!/bin/bash
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+   python EsriJson.py $gisfile
+done
+EOF
+
+
+
+
+cat <<-\EOF >gisCreateAllTables.sh
+#!/bin/bash
+export HADOOP_CLIENT_OPTS="-Djline.terminal=jline.UnsupportedTerminal"
+#Make sure we execute companyGrid first and only once as all the rest depend on it.
+#Rename the companyGrid shell for it so it will not be picked up the second time.
+
+BATCH_SIZE=50
+BATCH=0
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+    fname=$(basename $gisfile)
+    fbname=${fname%.*}
+    echo "Creating tables for $fbname"
+    . ../work/${fbname}_create.sh  > ../log/${fbname}_create.log 2>&1 &
+    ((BATCH++))
+    if ! ((BATCH % BATCH_SIZE)) ;then
+        echo "Waiting for tables to be processed..."
+        wait
+    fi
+done
+wait
+EOF
+
+cat <<-\EOF >gisIntersectToGrid.sh
+#!/bin/bash
+export HADOOP_CLIENT_OPTS="-Djline.terminal=jline.UnsupportedTerminal"
+BATCH_SIZE=50
+BATCH=0
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+    fname=$(basename $gisfile)
+    fbname=${fname%.*}
+    echo "Intersecting $fbname with companyGrid"
+    . ../work/${fbname}_intersect.sh  > ../log/${fbname}_intersect.log 2>&1 &
+    ((BATCH++))
+    if ! ((BATCH % BATCH_SIZE)) ;then
+        echo "Waiting for tables to be processed..."
+        wait
+    fi
+done
+wait
+EOF
+
+
+
+drop table companyGrid;
+CREATE TABLE companyGrid STORED AS PARQUET as
+SELECT
+    OBJECTID,
+    CREATIONUSER,
+    DATECREATED,
+    LASTUSER,
+    DATEMODIFIED,
+    GRIDNAME,
+    SMALLWORLDID,
+    ST_BinGeometry(1000,(geometry)) grid_arr,
+    geometry geometry
+  from companyGrid_raw;
+
+
+
+cat <<-\EOF >test.sh
+#!/bin/bash
+
+BATCH_SIZE=10
+BATCH=0
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+    fname=$(basename $gisfile)
+    fbname=${fname%.*}
+    echo "Creating tables for $fbname"
+    sleep 10 &
+    ((BATCH++))
+    if ! ((BATCH % BATCH_SIZE)) ;then
+        echo "Time to wait"
+        wait
+    fi
+
+done
+EOF
+
+
