@@ -416,111 +416,6 @@ hadoop fs -put /var/lib/hive/aux_jars/*.jar /user/hive/aux_jars/
 hadoop fs -chmod -R 770 /user/hive/aux_jars
 hadoop fs -chown -R hive:hive /user/hive/aux_jars
 
-
-create FUNCTION ST_BinEnvelope2 as 'com.esri.hadoop.hive.ST_BinEnvelope2' USING JAR 'hdfs:///user/hive/aux_jars/spatial-sdk-hive-1.1.1-SNAPSHOT.jar';
-
-    at org.apache.hadoop.hive.ql.exec.MapOperator.process(MapOperator.java:507)
-    at org.apache.hadoop.hive.ql.exec.mr.ExecMapper.map(ExecMapper.java:170)
-    at org.apache.hadoop.mapred.MapRunner.run(MapRunner.java:54)
-    at org.apache.hadoop.mapred.MapTask.runOldMapper(MapTask.java:453)
-    at org.apache.hadoop.mapred.MapTask.run(MapTask.java:343)
-    at org.apache.hadoop.mapred.YarnChild$2.run(YarnChild.java:164)
-    at java.security.AccessController.doPrivileged(Native Method)
-    at javax.security.auth.Subject.doAs(Subject.java:415)
-    at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1693)
-    at org.apache.hadoop.mapred.YarnChild.main(YarnChild.java:158)
-Caused by: java.lang.ClassCastException: java.util.ArrayList cannot be cast to org.apache.hadoop.io.BytesWritable
-    at org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableBinaryObjectInspector.getPrimitiveWritableObject(WritableBinaryObjectInspector.java:54)
-    at org.apache.hadoop.hive.serde2.lazy.LazyUtils.writePrimitiveUTF8(LazyUtils.java:240)
-    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.serialize(LazySimpleSerDe.java:303)
-    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.serializeField(LazySimpleSerDe.java:258)
-    at org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe.doSerialize(LazySimpleSerDe.java:242)
-    at org.apache.hadoop.hive.serde2.AbstractEncodingAwareSerDe.serialize(AbstractEncodingAwareSerDe.java:55)
-    at org.apache.hadoop.hive.ql.exec.FileSinkOperator.processOp(FileSinkOperator.java:668)
-    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
-    at org.apache.hadoop.hive.ql.exec.SelectOperator.processOp(SelectOperator.java:84)
-    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
-    at org.apache.hadoop.hive.ql.exec.FilterOperator.processOp(FilterOperator.java:120)
-    at org.apache.hadoop.hive.ql.exec.Operator.forward(Operator.java:815)
-    at org.apache.hadoop.hive.ql.exec.TableScanOperator.processOp(TableScanOperator.java:95)
-    at org.apache.hadoop.hive.ql.exec.MapOperator$MapOpCtx.forward(MapOperator.java:157)
-    at org.apache.hadoop.hive.ql.exec.MapOperator.process(MapOperator.java:497)
-    ... 9 more
-
-[4611673843165115679,4611673843165115680,4611673843165115681,4611673843165115682,4611673843165115683,4611673843165115684,4611673846202116178,4611673846202116179,4611673846202116180,4611673846202116181,4611673846202116182,4611673846202116183,4611673849239116677,4611673849239116678,4611673849239116679,4611673849239116680,4611673849239116681,4611673849239116682,4611673852276117176,4611673852276117177,4611673852276117178,4611673852276117179,4611673852276117180,4611673852276117181,4611673855313117675,4611673855313117676,4611673855313117677,4611673855313117678,4611673855313117679,4611673855313117680,4611673858350118174,4611673858350118175,4611673858350118176,4611673858350118177,4611673858350118178,4611673858350118179]
-
-
-
-sed 's/"fields" :sum=//'
-
-
-
-sed -n '/"fields":/,/],/{p; /],/q}' FileName
-sed -n '/"fields":/,/]/!d;/]/q'  RoadEdge.json
-
-
-
-fullfile= ../JSON/landbase/RoadEdge.json
-#Try to extract only the schema from the JSON (to speed processing up)
-fname=$(basename $fullfile)
-fbname=${fname%.*}
-echo '{"fields":'`cat $fullfile | tr -d '\n' | grep -o -P '(?<="fields":).*?(?=])'`']}' > ${fbname}_schema.json
-#generate sqls
-python EsriJson.py $fullfile
-
-
-
-
-fullfile=/home/bgold/GIS/JSON/landbase/RoadEdge.json
-#Try to extract only the schema from the JSON (to speed processing up)
-fname=$(basename $fullfile)
-fbname=${fname%.*}
-echo '{"fields":'`grep -o -P '(?<="fields":).*?(?=])' $fullfile`']}' > ${fbname}_schema.json
-#generate sqls
-python EsriJson.py $fullfile
-
-
-my $desc = "Description:";
-my $tag  = "Tag:";
-
-$line =~ /$desc(.*?)$tag/;
-my $matched = $1;
-print $matched;
-or
-
-my $desc = "Description:";
-my $tag  = "Tag:";
-
-my @matched = $line =~ /$desc(.*?)$tag/;
-print $matched[0];
-or
-
-my $desc = "Description:";
-my $tag  = "Tag:";
-
-(my $matched = $line) =~ s/$desc(.*?)$tag/$1/;
-print $matched;
-Additional
-
-If your Description and Tag may be on separate lines, you may need to use the /s modifier, to treat it as a single line, so the \n won't wreck it. Example:
-
-$_=qq{Description:foo
-      more description on
-      new line Tag: some
-      tag};
-s/Description:(.*?)Tag:/$1/s; #notice the trailing slash
-print;
-
-
-
-use strict;
-open(DAT, $data_file) || die("Could not open file!");
-print "file opened successfully!! \n";
-$data=<DAT>;
-
-
-cat /home/bgold/GIS/JSON/landbase/RoadEdge.json|grep -ob --line-buffered '"fields":'
-
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
@@ -556,8 +451,8 @@ EOF
 cat <<-\EOF >gisCreateAllTables.sh
 #!/bin/bash
 export HADOOP_CLIENT_OPTS="-Djline.terminal=jline.UnsupportedTerminal"
-#Make sure we execute companyGrid first and only once as all the rest depend on it.
-#Rename the companyGrid shell for it so it will not be picked up the second time.
+#Make sure we execute squareGrid first and only once as all the rest depend on it.
+#Rename the squareGrid shell for it so it will not be picked up the second time.
 
 BATCH_SIZE=50
 BATCH=0
@@ -585,7 +480,7 @@ for gisfile in `find ../JSON -type f -name "*.json"`;
 do
     fname=$(basename $gisfile)
     fbname=${fname%.*}
-    echo "Intersecting $fbname with companyGrid"
+    echo "Intersecting $fbname with squareGrid"
     . ../work/${fbname}_intersect.sh  > ../log/${fbname}_intersect.log 2>&1 &
     ((BATCH++))
     if ! ((BATCH % BATCH_SIZE)) ;then
@@ -598,8 +493,8 @@ EOF
 
 
 
-drop table companyGrid;
-CREATE TABLE companyGrid STORED AS PARQUET as
+drop table squareGrid;
+CREATE TABLE squareGrid STORED AS PARQUET as
 SELECT
     OBJECTID,
     CREATIONUSER,
@@ -610,7 +505,7 @@ SELECT
     SMALLWORLDID,
     ST_BinGeometry(1000,(geometry)) grid_arr,
     geometry geometry
-  from companyGrid_raw;
+  from squareGrid_raw;
 
 
 
@@ -633,5 +528,115 @@ do
 
 done
 EOF
+
+
+
+
+#!/bin/bash
+for gisfile in `find ../JSON -type f -name "*.json"`;
+do
+    #Extract schema information
+    fname=$(basename $gisfile)
+    fbname=${fname%.*}
+    echo "Generating schema JSON for $fbname"
+    datalength=10000
+    offset=`LC_ALL=C fgrep -ob '"fields":' $gisfile|cut -f1 -d":"`
+    schema_raw=`tail -c+$offset $gisfile | head -c$datalength`
+    echo '{"fields":'`echo $schema_raw|grep -o -P '(?<="fields":).*?(?=])'`']}' > ../work/${fbname}_schema.json
+done
+
+
+
+
+set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+--Keep the RAW table so it can always be referenced. 
+DROP TABLE IF EXISTS State_raw;
+CREATE TABLE State_raw (
+    OBJECTID INT,
+    CREATIONUSER STRING,
+    DATECREATED BIGINT,
+    LASTUSER STRING,
+    DATEMODIFIED BIGINT,
+    SMALLWORLDID INT,
+    STATENAME STRING,
+    STATEABBR STRING,
+    State_OID DOUBLE,
+    Shape_Length DOUBLE,
+    Shape_Area DOUBLE,
+    geometry binary)
+ROW FORMAT SERDE 'com.esri.hadoop.hive.serde.JsonSerde'
+STORED AS INPUTFORMAT 'com.esri.json.hadoop.EnclosedJsonInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+LOCATION '/user/gis/State';
+
+--Convert the table to parquet in an effort to have it more efficient. 
+--While doing it an additional field grid_arr will be added containing a list of the bins that intersect with the envelope of the geometry. 
+DROP TABLE IF EXISTS State;
+CREATE TABLE State STORED AS PARQUET as 
+SELECT  
+    OBJECTID,
+    CREATIONUSER,
+    DATECREATED,
+    LASTUSER,
+    DATEMODIFIED,
+    SMALLWORLDID,
+    STATENAME,
+    STATEABBR,
+    State_OID,
+    Shape_Length,
+    Shape_Area,
+    ST_BinGeometry(1000,(geometry)) grid_arr,
+    geometry geometry 
+  from State_raw; 
+
+--This is useful for fast debugging in Impala. It is not really required to join the table to the grid. 
+DROP TABLE IF EXISTS State_impala;
+CREATE TABLE State_impala STORED AS PARQUET as 
+SELECT  
+    OBJECTID,
+    CREATIONUSER,
+    DATECREATED,
+    LASTUSER,
+    DATEMODIFIED,
+    SMALLWORLDID,
+    STATENAME,
+    STATEABBR,
+    State_OID,
+    Shape_Length,
+    Shape_Area,
+    grid_arr grid_arr,
+    ST_AsGeoJson(geometry) geojson_geometry 
+  from State; 
+
+--Generate an index for the original table containing just the key and the bin for each geometry. 
+DROP TABLE IF EXISTS State_idx;
+CREATE TABLE State_idx STORED AS PARQUET as 
+SELECT  State_OID, gridid
+  from State LATERAL VIEW explode(grid_arr) grid_arr AS gridid; 
+
+--Rough intersect State with mySquregrid
+DROP TABLE IF EXISTS State_mySquregrid_i_tmp;
+CREATE TABLE State_mySquregrid_i_tmp STORED AS PARQUET as 
+SELECT  distinct State_idx.State_OID ,mySquregrid_idx.mySquregrid_oid 
+  from State_idx, mySquregrid_idx  
+  where 
+  State_idx.gridid=mySquregrid_idx.gridid  ;
+
+--Intersect State with mySquregrid
+DROP TABLE IF EXISTS State_mySquregrid_i;
+CREATE TABLE State_mySquregrid_i STORED AS PARQUET as 
+SELECT  State.State_oid, mySquregrid.mySquregrid_oid, mySquregrid.gridname,
+ ST_Area(State.geometry) locate_area,
+ ST_AREA(ST_Intersection(State.geometry,mySquregrid.geometry)) grid_covered_area,
+ ST_AREA(mySquregrid.geometry) grid_area
+  from State  
+  join  State_mySquregrid_i_tmp on (State.State_oid=State_mySquregrid_i_tmp.State_oid)  
+  join  mySquregrid on ( mySquregrid.mySquregrid_oid=State_mySquregrid_i_tmp.mySquregrid_oid)  
+  where 
+  ST_Intersects((mySquregrid.geometry),(State.geometry))  ;
+DROP TABLE IF EXISTS State_mySquregrid_i_tmp;
+
+
+
 
 

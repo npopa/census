@@ -1,18 +1,18 @@
 #!/bin/bash
 
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/COUNTY
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/STATE
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ZCTA5
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/PRIMARYROADS
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/RAILS
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ROADS
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/LINEARWATER
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/AREAWATER
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/PLACE
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/POINTLM
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDR
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFEAT
-wget -r ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFN
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/COUNTY
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/STATE
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/ZCTA5
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/PRIMARYROADS
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/RAILS
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/ROADS
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/LINEARWATER
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/AREAWATER
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/PLACE
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/POINTLM
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDR
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFEAT
+wget -r --no-parent ftp://ftp2.census.gov/geo/tiger/TIGER2016/ADDRFN
 
 
 yum -y install gdal
